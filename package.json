@@ -1,0 +1,26 @@
+{
+  "name": "teachingtech",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vuepress dev docs --open",
+    "debug": "vuepress dev docs --debug --open",
+    "build": "vuepress build docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KieranHolroyd/teachingtechYT.github.io.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/KieranHolroyd/teachingtechYT.github.io/issues"
+  },
+  "homepage": "https://github.com/KieranHolroyd/teachingtechYT.github.io#readme",
+  "description": "",
+  "devDependencies": {
+    "typescript": "^4.4.4",
+    "vuepress-vite": "^2.0.0-beta.27"
+  }
+}
