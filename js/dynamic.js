@@ -9,7 +9,7 @@ for(var i = 0; i < pages.length; i++){
     }
     menu += '>'+pages[i]+'</a>';
 }
-menu += '<span id="donate">Useful? Considering supporting me: <a href="https://paypal.me/testlawgicau" target="blank"><img class="icon" src="img/paypal.png" /></a><a href="http://www.patreon.com/teachingtech" target="blank"><img class="icon" src="img/patreon.png" /></a></span>';
+menu += '<span id="donate">Useful? Considering supporting me: <a href="https://paypal.me/testlawgicau" target="_blank"><img class="icon" src="img/paypal.png" /></a><a href="http://www.patreon.com/teachingtech" target="_blank"><img class="icon" src="img/patreon.png" /></a></span>';
 $('#menu').html(menu);
 function sizeBody(){
     var menuClearance = $('#menu').outerHeight()+30;
@@ -17,7 +17,7 @@ function sizeBody(){
 }
 
 $('head').append('<title>'+pageTitle+'</title>');
-var header ='<img src="img/tt.png" class="icon" style="vertical-align:middle;" /><h1>'+pageTitle+'</h1>';
+var header ='<table class="head"><tr><td><img src="img/tt.png" class="icon" style="vertical-align:middle;" /></td><td><h1>'+pageTitle+'</h1></td></tr></table>';
 $('#header').html(header);
 
 var up = '^ <span style="font-weight:bold;">TOP</span> ^';

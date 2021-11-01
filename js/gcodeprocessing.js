@@ -103,6 +103,13 @@ function toggleJ() {
     }
 }
 
+function updateFeeds(feedrate) {
+    $('.perimFeed').html(Math.round(feedrate*0.6));
+    $('.solidFeed').html(Math.round(feedrate*0.8));
+    $('.travelFeed').html(Math.round(feedrate*1.67));
+    $('.firstFeed').html(Math.round(feedrate*0.5));
+}
+
 function processGcode(formName) {
     var name = formName.name;
     var description = formName.description.value;
@@ -216,7 +223,8 @@ function processGcode(formName) {
     }
     // collect acceleration inputs
     if(name == "accelerationForm"){
-        var feed = formName.feedrate.value*60;
+        var inner = formName.innerFeedrate.value*60;
+        var outer = formName.outerFeedrate.value*60;
         var jerk_or_jd = formName.jerk_or_jd.value;
         var a1 = formName.accel_a1.value;
         var a2 = formName.accel_a2.value;
@@ -248,31 +256,39 @@ function processGcode(formName) {
         var f3 = formName.accel_f3.value;
         var f4 = formName.accel_f4.value;
         var f5 = formName.accel_f5.value;
+    } else {
+        var feed = formName.baseFeedrate.value*60;
+        var feedMod = feed/3600;
     }
     // process start gcode
+    var gcode;
+    if((formName.start.checked == true) && (formName.customStartOnly.checked == true)){
+        gcode = ";customstart";    
+    } else {
+        gcode = commonStart;
+    }    
     // bed temp
-    var gcode = commonStart;
     if(bedTemp == 0){
-        gcode = gcode.replace(/;bed0a/g, "; no heated bed");
-        gcode = gcode.replace(/;bed0b/g, "; no heated bed");
+         gcode = gcode.replace(/;bed0a/g, "; no heated bed");
+         gcode = gcode.replace(/;bed0b/g, "; no heated bed");
     } else {
         gcode = gcode.replace(/;bed0a/g, "M140 S"+bedTemp+" ; custom bed temp");
         gcode = gcode.replace(/;bed0b/g, "M190 S"+bedTemp+" ; custom bed temp");
     }
     // start hot end emp
     if(abl != 4){
-        gcode = gcode.replace(/;temp0a/g, "M104 S"+hotendTemp+" T0 ; custom hot end temp");
-        gcode = gcode.replace(/;temp0b/g, "M109 S"+hotendTemp+" T0 ; custom hot end temp");
+         gcode = gcode.replace(/;temp0a/g, "M104 S"+hotendTemp+" T0 ; custom hot end temp");
+         gcode = gcode.replace(/;temp0b/g, "M109 S"+hotendTemp+" T0 ; custom hot end temp");
     } else {
         gcode = gcode.replace(/;temp0a/g, "; Prusa Mini");
         gcode = gcode.replace(/;temp0b\n/g, "");
-    }
+     }
     // abl
     if(abl == 1){
-        gcode = gcode.replace(/;G29 ; probe ABL/, "G29 ; probe ABL");
+         gcode = gcode.replace(/;G29 ; probe ABL/, "G29 ; probe ABL");
     }
     if(abl == 2){
-        gcode =  gcode.replace(/;M420 S1 ; restore ABL mesh/, "M420 S1 ; restore ABL mesh");
+         gcode =  gcode.replace(/;M420 S1 ; restore ABL mesh/, "M420 S1 ; restore ABL mesh");
     }
     if(abl == 3){
         gcode = gcode.replace(/G28 ; home all axes/, "G28 W ; home all without mesh bed level");
@@ -281,7 +297,6 @@ function processGcode(formName) {
     if(abl == 4){
         gcode = gcode.replace(/G28 ; home all axes/, "M109 S170 T0 ; probing temperature\nG28 ; home all");
         gcode = gcode.replace(/;G29 ; probe ABL/, "G29 ; probe ABL");
-
         gcode = gcode.replace(/;M420 S1 ; restore ABL mesh/, "M109 S"+hotendTemp+" T0 ; custom hot end temp");
     }
     if(abl == 5){
@@ -295,28 +310,48 @@ function processGcode(formName) {
     }
     // firstlayer test square array
     if(name == "firstlayerForm"){
+        var squares = "";
         var originalSquare = firstlayer[nozzleLayer];
         for(var i = 0; i <= 4; i++){
-            var square = "; squarez "+(i+1)+"\n"+originalSquare;
+            var square = "\n; square "+(i+1)+originalSquare;
             var firstlayerArray = square.split(/\n/g);
             var regexp = /X[0-9\.]+/;
             firstlayerArray.forEach(function(index, item){
                 if(firstlayerArray[item].search(/X/) > -1){
                     var value = parseFloat(firstlayerArray[item].match(regexp)[0].substring(1)) + offsets[i*2];
-                    firstlayerArray[item] = firstlayerArray[item].replace(regexp, "X"+String(value));
+                    firstlayerArray[item] = firstlayerArray[item].replace(regexp, "X"+String(value.toFixed(4)));
                 }
             });
             var regexp = /Y[0-9\.]+/;
             firstlayerArray.forEach(function(index, item){
                 if(firstlayerArray[item].search(/Y/) > -1){
                     var value = parseFloat(firstlayerArray[item].match(regexp)[0].substring(1)) + offsets[i*2+1];
-                    firstlayerArray[item] = firstlayerArray[item].replace(regexp, "Y"+String(value))
+                    firstlayerArray[item] = firstlayerArray[item].replace(regexp, "Y"+String(value.toFixed(4)))
                 }
             });
             square = firstlayerArray.join("\n");
             squares += square;
         }
         gcode = gcode+squares;
+        if(feedMod != 1){
+            var gcodeArray = gcode.split(/\n/g);
+            var regexp = /F[0-9]+/;
+            gcodeArray.forEach(function(index, item){
+                if(gcodeArray[item].search(/F/) > -1){
+                    var value = parseFloat(gcodeArray[item].match(regexp)[0].substring(1));
+                    if(value != 1200){
+                        gcodeArray[item] = gcodeArray[item].replace(regexp, "F"+String(value*feedMod)+" ; custom feedrate")
+                    }
+                }
+            });
+            gcode = gcodeArray.join("\n");
+        }
+        gcode = gcode.replace(/;retract1\nG1 Z[0-9\.]+ F1200/g, ";retract1\n;zhop1");
+            if(zhop > 0){
+                gcode = gcode.replace(/;zhop1/g, "G91;\nG1 Z"+zhop+" F1200; custom z hop\nG90;");
+            }  
+        gcode = gcode.replace(/;retract1/g, "G1 E-"+retDist+" F"+retSpeed+" ; custom retraction");
+        gcode = gcode.replace(/;unretract1/g, "G1 E"+retDistExtra+" F"+retSpeed+" ; custom un-retraction/prime");
     }
     // assign correct gcode source
     if(name == "baselineForm"){
@@ -331,8 +366,12 @@ function processGcode(formName) {
     if(name == "accelerationForm"){
         gcode += acceleration[nozzleLayer];
     }
-    // add end common gcode
-    gcode += commonEnd;
+    // add end gcode
+    if((formName.customEndOnly.checked == true) && (formName.end.checked == true)){
+        gcode += ";customend\n";      
+    } else {
+        gcode += commonEnd;
+    }    
     if(name != "firstlayerForm"){
         // strip original fan command
         gcode = gcode.replace(/M106 S3/, ";");
@@ -357,14 +396,14 @@ function processGcode(formName) {
             gcodeArray.forEach(function(index, item){
                 if(gcodeArray[item].search(/X/) > -1){
                     var value = parseFloat(gcodeArray[item].match(regexp)[0].substring(1)) - 50;
-                    gcodeArray[item] = gcodeArray[item].replace(regexp, "X"+String(value));
+                    gcodeArray[item] = gcodeArray[item].replace(regexp, "X"+String(value.toFixed(4)));
                 }
             });
             var regexp = /Y[0-9\.]+/;
             gcodeArray.forEach(function(index, item){
                 if(gcodeArray[item].search(/Y/) > -1){
                     var value = parseFloat(gcodeArray[item].match(regexp)[0].substring(1)) - 50;
-                    gcodeArray[item] = gcodeArray[item].replace(regexp, "Y"+String(value))
+                    gcodeArray[item] = gcodeArray[item].replace(regexp, "Y"+String(value.toFixed(4)))
                 }
             });
             gcode = gcodeArray.join("\n");
@@ -375,7 +414,7 @@ function processGcode(formName) {
                 gcodeArray.forEach(function(index, item){
                     if(gcodeArray[item].search(/X/) > -1){
                         var value = parseFloat(gcodeArray[item].match(regexp)[0].substring(1)) + bedX;
-                        gcodeArray[item] = gcodeArray[item].replace(regexp, "X"+String(value));
+                        gcodeArray[item] = gcodeArray[item].replace(regexp, "X"+String(value.toFixed(4)));
                     }
                 });
                 gcode = gcodeArray.join("\n");
@@ -386,25 +425,43 @@ function processGcode(formName) {
                 gcodeArray.forEach(function(index, item){
                     if(gcodeArray[item].search(/Y/) > -1){
                         var value = parseFloat(gcodeArray[item].match(regexp)[0].substring(1)) + bedY;
-                        gcodeArray[item] = gcodeArray[item].replace(regexp, "Y"+String(value))
+                        gcodeArray[item] = gcodeArray[item].replace(regexp, "Y"+String(value.toFixed(4)))
                     }
                 });
                 gcode = gcodeArray.join("\n");
             }   
         }
+        // feedrate change
+        if(name != "accelerationForm"){
+            if(feedMod != 1){
+                var gcodeArray = gcode.split(/\n/g);
+                var regexp = /F[0-9]+/;
+                gcodeArray.forEach(function(index, item){
+                    if(gcodeArray[item].search(/F/) > -1){
+                        var value = parseFloat(gcodeArray[item].match(regexp)[0].substring(1));
+                        //alert(value);
+                        if(value != 1200){
+                            gcodeArray[item] = gcodeArray[item].replace(regexp, "F"+String(value*feedMod)+" ; custom feedrate")
+                        }
+                    }
+                });
+                gcode = gcodeArray.join("\n");
+            }
+        }
+
         // changes for acceleration test
         if(name == "accelerationForm"){
             // edit feedrates
-            gcode = gcode.replace(/F3600/g, "F"+feed+" ; custom feedrate - full");
-            gcode = gcode.replace(/F2880/g, "F"+feed+" ; custom feedrate - full");
-            gcode = gcode.replace(/F2160/g, "F"+feed/2+" ; custom feedrate - half");
+            gcode = gcode.replace(/F3600/g, "F"+inner+" ; custom outer perimeter feedrate");
+            gcode = gcode.replace(/F2880/g, "F"+inner+" ; custom outer perimeter feedrate");
+            gcode = gcode.replace(/F2160/g, "F"+outer+" ; custom inner perimeter feedrate");
             // add acceleration segments
-            gcode = gcode.replace(/;process Process-1/, "M201 X50000 Y50000 Z50000; custom raise acceleration limits\nM204 P"+a1+" ; custom acceleration - A\n;j1");
-            gcode = gcode.replace(/;process Process-2/, "M204 P"+b1+" ; custom acceleration - B\n;j2");
-            gcode = gcode.replace(/;process Process-3/, "M204 P"+c1+" ; custom acceleration - C\n;j3");
-            gcode = gcode.replace(/;process Process-4/, "M204 P"+d1+" ; custom acceleration - D\n;j4");
-            gcode = gcode.replace(/;process Process-5/, "M204 P"+e1+" ; custom acceleration - E\n;j5");
-            gcode = gcode.replace(/;process Process-6/, "M204 P"+f1+" ; custom acceleration - F\n;j6");
+            gcode = gcode.replace(/;process Process-1/, "M201 X50000 Y50000 Z50000; custom raise acceleration limits\nM204 P"+a1+" T"+a1+" ; custom acceleration - A\n;j1");
+            gcode = gcode.replace(/;process Process-2/, "M204 P"+b1+" T"+b1+" ; custom acceleration - B\n;j2");
+            gcode = gcode.replace(/;process Process-3/, "M204 P"+c1+" T"+c1+" ; custom acceleration - C\n;j3");
+            gcode = gcode.replace(/;process Process-4/, "M204 P"+d1+" T"+d1+" ; custom acceleration - D\n;j4");
+            gcode = gcode.replace(/;process Process-5/, "M204 P"+e1+" T"+e1+" ; custom acceleration - E\n;j5");
+            gcode = gcode.replace(/;process Process-6/, "M204 P"+f1+" T"+f1+" ; custom acceleration - F\n;j6");
             // add jerk/junction deviation segments
             if(jerk_or_jd == "jerk"){
                 gcode = gcode.replace(/;j1/, "M205 X"+a2+" Y"+a3+" Z"+a5+" ; custom jerk - A");
@@ -497,6 +554,10 @@ function processGcode(formName) {
     if(formName.end.checked == true) {
         gcode = gcode.replace(/;customend/, "; custom end gcode\n"+customEnd);
     }
+    if(formName.deltaHome.checked == true) {
+        gcode = gcode.replace(/G28 X0 ; home X axis/, "G28 ; home all on delta");
+    }
+    
     // process finished gcode file
     downloadFile(description+'.gcode', gcode);
 }
@@ -529,6 +590,15 @@ function outputSettings(formName) {
     string += " form\n_________________________________________________________________________\n\n";
     string += "G-Code originally generated by Simplify3D(R) Version 4.1.2\nThis calibration test gcode modified by the Teaching Tech Calibration website: https://teachingtechyt.github.io/calibration.html\n";
     string += "All changes are marked in the gcode with 'custom' at the end of each line. Open the gcode in a text editor and search for this to your check inputs if needed.\n\n";
+    
+    // Get selected value
+    var nozzleLayer = formName.nozzleLayer.value;
+    // Split Nozzle/Layer value
+    const nozzleLayerArr = nozzleLayer.split("_");
+    // Parse both values
+    string += "\nNozzle diameter: " + nozzleLayerArr[0]/100+" mm";
+    string += "\nLayer height: " + nozzleLayerArr[1]/100+" mm\n";
+
     if(formName.psuon.checked == true) {
         string += "Turn on PSU with M80 active\n"
     }
@@ -548,17 +618,26 @@ function outputSettings(formName) {
             string += ", "+formName.beddia.value+" mm diameter";
         }
     }
+
+    if(formName.baseFeedrate != undefined){
+        string += "\n\nBase feedrate: "+formName.baseFeedrate.value+" mm/sec";
+        string += "\nPerimeters: "+document.querySelector( ".perimFeed" ).innerText+" mm/sec";
+        string += "\nSolid infill: "+document.querySelector( ".solidFeed" ).innerText+" mm/sec";
+        string += "\nTravel moves: "+document.querySelector( ".travelFeed" ).innerText+" mm/sec";
+        string += "\nFirst layer: "+document.querySelector( ".firstFeed" ).innerText+" mm/sec";
+    }
+
     if(formName.name == "firstlayerForm") {
         string += "\nExtra margin from edge: "+formName.margin.value+" mm";
     }
     string += "\n\nTemperatures:\n";
     if(formName.name == "temperatureForm") {
         string += "Bed: "+formName.bedtemp.value+" deg C\n";
-        string += "Segement E: "+formName.temp_e1.value+" deg C\n";
-        string += "Segement D: "+formName.temp_d1.value+" deg C\n";
-        string += "Segement C: "+formName.temp_c1.value+" deg C\n";
-        string += "Segement B: "+formName.temp_b1.value+" deg C\n";
-        string += "Segement A: "+formName.temp_a1.value+" deg C\n";
+        string += "Segment E: "+formName.temp_e1.value+" deg C\n";
+        string += "Segment D: "+formName.temp_d1.value+" deg C\n";
+        string += "Segment C: "+formName.temp_c1.value+" deg C\n";
+        string += "Segment B: "+formName.temp_b1.value+" deg C\n";
+        string += "Segment A: "+formName.temp_a1.value+" deg C\n";
         string += "First Layer: "+formName.temp_a0.value+" deg C\n";
     } else {
         string += "Bed: "+formName.bedtemp.value+" deg C\n";
@@ -586,7 +665,8 @@ function outputSettings(formName) {
         string += "Z hop: "+formName.zhop.value+" mm\n";
     }
     if(formName.name == "accelerationForm") {
-        string += "\nBase feedrate: "+formName.feedrate.value+" mm/s\n\n";
+        string += "\nInner perimeter feedrate: "+formName.innerFeedrate.value+" mm/s";
+        string += "\nOuter perimeter feedrate: "+formName.outerFeedrate.value+" mm/s\n\n";
         var jjd = formName.jerk_or_jd.value;
         if(jjd == "jerk") {
             string += "Segment | M204 P Acceleration |  M205 Jerk X  |  M205 Jerk Y|  M205 Jerk Z   \n";
